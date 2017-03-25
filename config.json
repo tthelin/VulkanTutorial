@@ -1,7 +1,10 @@
 {
     "title": "Vulkan Tutorial",
     "tagline": "A tutorial that teaches you everything it takes to render 3D graphics with the Vulkan API. It covers everything from Windows/Linux setup to rendering and debugging.",
-    "author": "Alexander Overvoorde",
+    "author": "Alexander Overvoorde",{
+    "languages": {
+        "cpp": "C++"
+    },
     "live": {
         "inherit_index": true,
         "clean_urls": true
