@@ -266,8 +266,13 @@ continue to use Vulkan documentation and easily know how to use it from Java.
 
 ##### Symbols
 
-Vulkan symbols you'd find in the vulkan.h header are in the
-`org.lwjgl.vulkan.VK10` package. They are named exactly the same.
+Vulkan symbols (functions, constants, etc) you'd find in the vulkan.h header are
+in the `org.lwjgl.vulkan.VK10` package. They are named exactly the same.
+
+When Vulkan comes out with a new version, say 1.1, then LWJGL will make a new
+Java package named after that version (i.e. VK11) and any symbol that is new to
+that vesion will be in that package (existing symbols will still be in their
+original package, such as VK10).
 
 ##### Structs
 
@@ -290,6 +295,12 @@ if (vkCreateXXX(createInfo, null, handleBuffer) != VK_SUCCESS) {
   throw new AssertionError("Failed to create object");
 }
 ```
+
+You've likely noticed that the above example has method names it it that sound
+like C memory management. You're right. Since Vulkan is a C API it assumes the
+caller has control of memory and its layout, thus to make that work from Java
+we have to explicitly deal with memory we're passing to/from Vulkan. We'll
+discuss this more later.
 
 #### Memory layout and management
 
