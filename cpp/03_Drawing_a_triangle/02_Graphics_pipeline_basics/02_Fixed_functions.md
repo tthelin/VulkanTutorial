@@ -41,12 +41,12 @@ like:
 
 * `VK_PRIMITIVE_TOPOLOGY_POINT_LIST`: points from vertices
 * `VK_PRIMITIVE_TOPOLOGY_LINE_LIST`: line from every 2 vertices without reuse
-* `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`: every second vertex is used as start
-vertex for the next line
+* `VK_PRIMITIVE_TOPOLOGY_LINE_STRIP`: the end vertex of every line is used as
+start vertex for the next line
 * `VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST`: triangle from every 3 vertices without
 reuse
-* `VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP `: every third vertex is used as first
-vertex for the next triangle
+* `VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP `: the second and third vertex of every
+triangle are used as first two vertices of the next triangle
 
 Normally, the vertices are loaded from the vertex buffer by index in sequential
 order, but with an *element buffer* you can specify the indices to use yourself.
@@ -213,7 +213,7 @@ multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 multisampling.sampleShadingEnable = VK_FALSE;
 multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 multisampling.minSampleShading = 1.0f; // Optional
-multisampling.pSampleMask = nullptr; /// Optional
+multisampling.pSampleMask = nullptr; // Optional
 multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 multisampling.alphaToOneEnable = VK_FALSE; // Optional
 ```
@@ -301,7 +301,7 @@ You can find all of the possible operations in the `VkBlendFactor` and
 
 The second structure references the array of structures for all of the
 framebuffers and allows you to set blend constants that you can use as blend
-factors in the aforementioned calculations. 
+factors in the aforementioned calculations.
 
 ```c++
 VkPipelineColorBlendStateCreateInfo colorBlending = {};
@@ -365,7 +365,7 @@ Create a class member to hold this object, because we'll refer to it from other
 functions at a later point in time:
 
 ```c++
-VDeleter<VkPipelineLayout> pipelineLayout{device, vkDestroyPipelineLayout};
+VkPipelineLayout pipelineLayout;
 ```
 
 And then create the object in the `createGraphicsPipeline` function:
@@ -378,14 +378,22 @@ pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
 pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 pipelineLayoutInfo.pPushConstantRanges = 0; // Optional
 
-if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr,
-    pipelineLayout.replace()) != VK_SUCCESS) {
+if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
     throw std::runtime_error("failed to create pipeline layout!");
 }
 ```
 
 The structure also specifies *push constants*, which are another way of passing
-dynamic values to shaders that we'll get into later.
+dynamic values to shaders that we may get into in a future chapter. The pipeline
+layout is may be referenced throughout the program's lifetime, so it should be
+destroyed at the end:
+
+```c++
+void cleanup() {
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    ...
+}
+```
 
 ## Conclusion
 
