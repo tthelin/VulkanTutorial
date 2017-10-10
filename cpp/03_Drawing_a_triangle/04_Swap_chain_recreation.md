@@ -30,64 +30,89 @@ shouldn't touch resources that may still be in use. Obviously, the first thing
 we'll have to do is recreate the swap chain itself. The image views need to be
 recreated because they are based directly on the swap chain images. The render
 pass needs to be recreated because it depends on the format of the swap chain
-images. Viewport and scissor rectangle size is specified during graphics
-pipeline creation, so the pipeline also needs to be rebuilt. It is possible to
-avoid this by using dynamic state for the viewports and scissor rectangles.
-Finally, the framebuffers and command buffers also directly depend on the swap
-chain images.
+images. It is rare for the swap chain image format to change during an operation
+like a window resize, but it should still be handled. Viewport and scissor
+rectangle size is specified during graphics pipeline creation, so the pipeline
+also needs to be rebuilt. It is possible to avoid this by using dynamic state
+for the viewports and scissor rectangles. Finally, the framebuffers and command
+buffers also directly depend on the swap chain images.
 
-Because of our handy `VDeleter` construct, most of the functions will work fine
-for recreation and will automatically clean up the old objects. However, the
-`createSwapChain` and `createCommandBuffers` functions still need some
-adjustments.
+To make sure that the old versions of these objects are cleaned up before
+recreating them, we should move some of the cleanup code to a separate function
+that we can call from the `recreateSwapChain` function. Let's call it
+`cleanupSwapChain`:
 
 ```c++
-VkSwapchainKHR oldSwapChain = swapChain;
-createInfo.oldSwapchain = oldSwapChain;
+void cleanupSwapChain() {
 
-VkSwapchainKHR newSwapChain;
-if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &newSwapChain) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create swap chain!");
 }
 
-swapChain = newSwapChain;
+void recreateSwapChain() {
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createRenderPass();
+    createGraphicsPipeline();
+    createFramebuffers();
+    createCommandBuffers();
+}
 ```
 
-We need to pass the previous swap chain object in the `oldSwapchain` parameter
-of `VkSwapchainCreateInfoKHR` to indicate that we intend to replace it. The old
-swap chain needs to stick around until after the new swap chain has been
-created, which means that we can't directly write the new handle to `swapChain`.
-The `VDeleter` would clear the old object before `vkCreateSwapchainKHR` has a
-chance to execute. That's why we use the temporary `newSwapChain` variable.
+we'll move the cleanup code of all objects that are recreated as part of a swap
+chain refresh from `cleanup` to `cleanupSwapChain`:
 
 ```c++
-swapChain = newSwapChain;
-```
+void cleanupSwapChain() {
+    for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
+        vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
+    }
 
-This line will actually destroy the old swap chain and replace the handle with
-the handle of the new swap chain.
+    vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 
-The problem with `createCommandBuffers` is that it doesn't free the old command
-buffers. There are two ways to solve this:
+    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyRenderPass(device, renderPass, nullptr);
 
-* Call `createCommandPool` as well, which will automatically free the old
-command buffers
-* Extend `createCommandBuffers` to free any previous command buffers
+    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        vkDestroyImageView(device, swapChainImageViews[i], nullptr);
+    }
 
-As there isn't really a need to recreate the command pool itself, I've chosen to
-go for the second solution in this tutorial.
-
-```c++
-if (commandBuffers.size() > 0) {
-    vkFreeCommandBuffers(device, commandPool, commandBuffers.size(), commandBuffers.data());
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
 }
 
-commandBuffers.resize(swapChainFramebuffers.size());
+void cleanup() {
+    cleanupSwapChain();
+
+    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+    vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+
+    vkDestroyCommandPool(device, commandPool, nullptr);
+
+    vkDestroyDevice(device, nullptr);
+    DestroyDebugReportCallbackEXT(instance, callback, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    vkDestroyInstance(instance, nullptr);
+
+    glfwDestroyWindow(window);
+
+    glfwTerminate();
+}
 ```
 
-The `createCommandBuffers` function now first checks if the `commandBuffers`
-vector already contains previous command buffers, and if so, frees them. That's
-all it takes to recreate the swap chain!
+We could recreate the command pool from scratch, but that is rather wasteful.
+Instead I've opted to clean up the existing command buffers with the
+`vkFreeCommandBuffers` function. This way we can reuse the existing pool to
+allocate the new command buffers.
+
+That's all it takes to recreate the swap chain! However, the disadvantage of
+this approach is that we need to stop all rendering before creating the new swap
+chain. It is possible to create a new swap chain while drawing commands on an
+image from the old swap chain are still in-flight. You need to pass the previous
+swap chain to the `oldSwapChain` field in the `VkSwapchainCreateInfoKHR` struct
+and destroy the old swap chain as soon as you've finished using it.
 
 ## Window resizing
 
@@ -180,6 +205,8 @@ if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 } else if (result != VK_SUCCESS) {
     throw std::runtime_error("failed to present swap chain image!");
 }
+
+vkQueueWaitIdle(presentQueue);
 ```
 
 The `vkQueuePresentKHR` function returns the same values with the same meaning.

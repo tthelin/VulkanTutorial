@@ -54,10 +54,10 @@ Validation layers can only be used if they have been installed onto the system.
 For example, the LunarG validation layers are only available on PCs with the
 Vulkan SDK installed.
 
-There were formerly two different types of validation layers in Vulkan. Instance
-and device specific layers. The idea was that instance layers would only check
-calls related to global Vulkan objects like instances and device specific layers
-only calls related to a specific GPU. Device specific layers have now been
+There were formerly two different types of validation layers in Vulkan: instance
+and device specific. The idea was that instance layers would only check
+calls related to global Vulkan objects like instances, and device specific layers
+would only check calls related to a specific GPU. Device specific layers have now been
 deprecated, which means that instance validation layers apply to all Vulkan
 calls. The specification document still recommends that you enable validation
 layers at device level as well for compatibility, which is required by some
@@ -155,7 +155,7 @@ validation layer names if they are enabled:
 
 ```c++
 if (enableValidationLayers) {
-    createInfo.enabledLayerCount = validationLayers.size();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
 } else {
     createInfo.enabledLayerCount = 0;
@@ -205,7 +205,7 @@ We can now use this function in `createInstance`:
 
 ```c++
 auto extensions = getRequiredExtensions();
-createInfo.enabledExtensionCount = extensions.size();
+createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 createInfo.ppEnabledExtensionNames = extensions.data();
 ```
 
@@ -248,10 +248,15 @@ any of the following bit flags:
 The `objType` parameter specifies the type of object that is the subject of the
 message. For example if `obj` is a `VkPhysicalDevice` then `objType` would be
 `VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT`. This works because internally all
-Vulkan handles are typedef'd as `uint64_t`.
+Vulkan handles are typedef'd as `uint64_t`. The `msg` parameter contains the
+pointer to the message itself. Finally, there's a `userData` parameter to pass
+your own data to the callback.
 
-The `msg` parameter contains the pointer to the message itself. Finally, there's
-a `userData` parameter to pass your own data to the callback.
+The callback returns a boolean that indicates if the Vulkan call that triggered
+the validation layer message should be aborted. If the callback returns true,
+then the call is aborted with the `VK_ERROR_VALIDATION_FAILED_EXT` error. This
+is normally only used to test the validation layers themselves, so you should
+always return `VK_FALSE`.
 
 All that remains now is telling Vulkan about the callback function. Perhaps
 somewhat surprisingly, even the debug callback in Vulkan is managed with a
@@ -297,7 +302,7 @@ create the `VkDebugReportCallbackEXT` object. Unfortunately, because this
 function is an extension function, it is not automatically loaded. We have to
 look up its address ourselves using `vkGetInstanceProcAddr`. We're going to
 create our own proxy function that handles this in the background. I've added it
-right above the `VDeleter` definition.
+right above the `HelloTriangleApplication` class definition.
 
 ```c++
 VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
@@ -320,18 +325,21 @@ if (CreateDebugReportCallbackEXT(instance, &createInfo, nullptr, &callback) != V
 }
 ```
 
-Let's see if it works... Run the program and close the window once you're fed up
-with staring at the blank window. You'll see that the following message is
-printed to the command prompt:
+The second to last parameter is again the optional allocator callback that we
+set to `nullptr`, other than that the parameters are fairly straightforward.
+Since the debug callback is specific to our Vulkan instance and its layers, it
+needs to be explicitly specified as first argument. You will also see this
+pattern with other *child* objects later on. Let's see if it works... Run the
+program and close the window once you're fed up with staring at the blank
+window. You'll see that the following message is printed to the command prompt:
 
 ![](/images/validation_layer_test.png)
 
 Oops, it has already spotted a bug in our program! The
 `VkDebugReportCallbackEXT` object needs to be cleaned up with a call to
-`vkDestroyDebugReportCallbackEXT`. Change the `callback` variable to use our
-deleter wrapper. Similarly to `vkCreateDebugReportCallbackEXT` the function
-needs to be explicitly loaded. Create another proxy function right below
-`CreateDebugReportCallbackEXT`:
+`vkDestroyDebugReportCallbackEXT`. Similarly to `vkCreateDebugReportCallbackEXT`
+the function needs to be explicitly loaded. Create another proxy function right
+below `CreateDebugReportCallbackEXT`:
 
 ```c++
 void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator) {
@@ -343,17 +351,17 @@ void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT
 ```
 
 Make sure that this function is either a static class function or a function
-outside the class. We can then specify it as cleanup function:
+outside the class. We can then call it in the `cleanup` function:
 
 ```c++
-VDeleter<VkDebugReportCallbackEXT> callback{instance, DestroyDebugReportCallbackEXT};
-```
+void cleanup() {
+    DestroyDebugReportCallbackEXT(instance, callback, nullptr);
+    vkDestroyInstance(instance, nullptr);
 
-Make sure to change the line that creates the debug report callback to use the
-`replace()` method of the wrapper:
+    glfwDestroyWindow(window);
 
-```c++
-if (CreateDebugReportCallbackEXT(instance, &createInfo, nullptr, callback.replace()) != VK_SUCCESS) {
+    glfwTerminate();
+}
 ```
 
 When you run the program again you'll see that the error message has

@@ -10,8 +10,6 @@ void mainLoop() {
         glfwPollEvents();
         drawFrame();
     }
-
-    glfwDestroyWindow(window);
 }
 
 ...
@@ -55,8 +53,8 @@ presentation can happen. Create two class members to store these semaphore
 objects:
 
 ```c++
-VDeleter<VkSemaphore> imageAvailableSemaphore{device, vkDestroySemaphore};
-VDeleter<VkSemaphore> renderFinishedSemaphore{device, vkDestroySemaphore};
+VkSemaphore imageAvailableSemaphore;
+VkSemaphore renderFinishedSemaphore;
 ```
 
 To create the semaphores, we'll add the last `create` function for this part of
@@ -102,11 +100,20 @@ Future versions of the Vulkan API or extensions may add functionality for the
 the semaphores follows the familiar pattern with `vkCreateSemaphore`:
 
 ```c++
-if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, imageAvailableSemaphore.replace()) != VK_SUCCESS ||
-    vkCreateSemaphore(device, &semaphoreInfo, nullptr, renderFinishedSemaphore.replace()) != VK_SUCCESS) {
+if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+    vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS) {
 
     throw std::runtime_error("failed to create semaphores!");
 }
+```
+
+The semaphores should be cleaned up at the end of the program, when all commands
+have finished and no more synchronization is necessary:
+
+```c++
+void cleanup() {
+    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+    vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 ```
 
 ## Acquiring an image from the swap chain
@@ -208,11 +215,11 @@ start of the render pass and at the end of the render pass, but the former does
 not occur at the right time. It assumes that the transition occurs at the start
 of the pipeline, but we haven't acquired the image yet at that point! There are
 two ways to deal with this problem. We could change the `waitStages` for the
-`imageAvailableSemaphore` to `VK_PIPELINE_STAGE_TOP_OF_PIPELINE_BIT` to ensure
-that the render passes don't begin until the image is available, or we can make
-the render pass wait for the `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`
-stage. I've decided to go with the second option here, because it's a good
-excuse to have a look at subpass dependencies and how they work.
+`imageAvailableSemaphore` to `VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT` to ensure that
+the render passes don't begin until the image is available, or we can make the
+render pass wait for the `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT` stage.
+I've decided to go with the second option here, because it's a good excuse to
+have a look at subpass dependencies and how they work.
 
 Subpass dependencies are specified in `VkSubpassDependency` structs. Go to the
 `createRenderPass` function and add one:
@@ -310,8 +317,8 @@ something resembling the following when you run your program:
 ![](/images/triangle.png)
 
 Yay! Unfortunately, you'll see that when validation layers are enabled, the
-program crashes as soon as you close it. The message printed to the terminal
-from `debugCallback` tells us why:
+program crashes as soon as you close it. The messages printed to the terminal
+from `debugCallback` tell us why:
 
 ![](/images/semaphore_in_use.png)
 
@@ -331,8 +338,6 @@ void mainLoop() {
     }
 
     vkDeviceWaitIdle(device);
-
-    glfwDestroyWindow(window);
 }
 ```
 
@@ -340,6 +345,48 @@ You can also wait for operations in a specific command queue to be finished with
 `vkQueueWaitIdle`. These functions can be used as a very rudimentary way to
 perform synchronization. You'll see that the program now exits without problems
 when closing the window.
+
+## Memory leak
+
+If you run your application with validation layers enabled and you monitor the
+memory usage of your application, you may notice that it is slowly growing. The
+reason for this is that the validation layer implementation expects the
+application to explicitly synchronize with the GPU. Although this is technically
+not required, doing so once a frame will not noticeably affect performance.
+
+We can do this by explicitly waiting for presentation to finish before starting
+to draw the next frame:
+
+```c++
+void drawFrame() {
+    ...
+
+    vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    vkQueueWaitIdle(presentQueue);
+}
+```
+
+The state of the application is also updated every frame in many applications.
+In that case it would be most efficient to draw a frame this way:
+
+```c++
+void drawFrame() {
+    updateAppState();
+
+    vkQueueWaitIdle(presentQueue);
+
+    vkAcquireNextImageKHR(...)
+
+    submitDrawCommands();
+
+    vkQueuePresentKHR(presentQueue, &presentInfo);
+}
+```
+
+This approach allows you to update the state of the application, for example run
+the AI routines in a game, while the previous frame is being rendered. That way
+you keep both the GPU and CPU busy at all times.
 
 ## Conclusion
 
