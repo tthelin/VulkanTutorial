@@ -344,4 +344,4 @@ extensions.
 
 Congratulations, you're all set for playing with Vulkan!
 
-You are now all set for [the real adventure](!Drawing_a_triangle).
+You are now all set for [the real adventure](!Drawing_a_triangle/Setup/Base_code).
