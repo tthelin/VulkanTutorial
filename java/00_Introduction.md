@@ -38,8 +38,16 @@ tutorial:
 
 This tutorial will not assume knowledge of OpenGL or Direct3D concepts, but it
 does require you to know the basics of 3D computer graphics. It will not explain
-the math behind perspective projection, for example. See [this online book](https://www.docdroid.net/UKocmTz/arcsynthesis.pdf.html)
+the math behind perspective projection, for example. See [this online book](http://opengl.datenwolf.net/gltut/html/index.html)
 for a great introduction of computer graphics concepts.
+
+## E-book
+
+If you prefer to read this tutorial as an e-book, then you can download an EPUB
+or PDF version here:
+
+* [EPUB](https://raw.githubusercontent.com/Overv/VulkanTutorial/master/ebook/Vulkan%20Tutorial.epub)
+* [PDF](https://raw.githubusercontent.com/Overv/VulkanTutorial/master/ebook/Vulkan%20Tutorial.pdf)
 
 ## Tutorial structure
 
@@ -100,5 +108,10 @@ is easy to understand and does not feel redundant. It's also important to keep
 in mind that once you have that boring looking triangle, drawing fully textured
 3D models does not take that much extra work, and each step beyond that point is
 much more rewarding.
+
+If you encounter any problems while following the tutorial, then first check the
+FAQ to see if your problem and its solution is already listed there. If you are
+still stuck after that, then feel free to ask for help in the comment section of
+the closest related chapter.
 
 Ready to dive into the future of high performance graphics APIs? [Let's go!](!Overview)
