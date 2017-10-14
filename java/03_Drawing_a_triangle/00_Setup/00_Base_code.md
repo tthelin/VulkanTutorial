@@ -36,40 +36,40 @@ as private members and add methods to initiate each of them, which will
 be called from the `initVulkan` function. Once everything has been prepared, we
 enter the main loop to start rendering frames. We'll fill in the `mainLoop`
 function to include a loop that iterates until the window is closed in a moment.
+Once the window is closed and `mainLoop` returns, we'll make sure to deallocate
+the resources we've used in the `cleanup` function.
 
 If any kind of fatal error occurs during execution then we'll throw an
 AssertionError with a descriptive message, which will cause our program to exit
 with the error printed on the screen. One example of an error that we will deal
 with soon is finding out that a certain required extension is not supported.
 
-Whether an error occurs or not, the `cleanup` method is called to make sure
-we clean up our resources properly (GLFW handles, Vulkan handles, and any raw
-memory still allocated).
-
 Roughly every chapter that follows after this one will add one new function that
 will be called from `initVulkan` and one or more new Vulkan objects to the
-private members.
+private members that need to be disposed of at the end in `cleanup`.
 
 ## Resource management
 
 ### Native objects and handles
 
-When using GLFW and Vulkan, you create objects with those APIs and use them in
-various ways. What is passed to you is called a "handle", which is a fancy
-name for an opaque 64-bit value. You pass this handle to various GLFW and Vulkan
-functions, and when you're done with the object, you call an function to destroy
-it.
+Vulkan objects are either created directly with functions like `vkCreateXXX`, or
+allocated through another object with functions like `vkAllocateXXX`. After
+making sure that an object is no longer used anywhere, you need to destroy it
+with the counterparts `vkDestroyXXX` and `vkFreeXXX`. The parameters for these
+functions generally vary for different types of objects, but there is one
+parameter that they all share: `pAllocator`. This is an optional parameter that
+allows you to specify callbacks for a custom memory allocator. We will ignore
+this parameter in the tutorial and always pass `null` as argument.
+ 
+When using Vulkan with Java, the `vkCreateXXX` and `vkAllocateXXX` calls return
+a long, which represents a reference to a "native-to-Vulkan object". The
+reference itself is referred to as a "handle", and you pass the handle to
+various Vulkan methods to tell it what native object to operate on.
 
-Please don't confuse these "native objects" (as I'll now refer to them) with
-Java objects, as they are not the same thing. Java objects are instances of
-Java classes. Native objects are just a logical construct of the API you're
-calling that's referenced via a handle.
-
-When creating these native objects in Java, we get passed back the handles as
-simple `long`s as those are 64-bit and compatible with storing a handle.
-
-When using API calls that require the handle as a parameter, just pass the
-`long` value from earlier.
+Please don't confuse these "native objects" (as this tutorial will now refer to
+them) with Java objects, as they are not the same thing. Java objects are
+instances of Java classes. Native objects are just a logical construct of the
+API you're calling that's referenced via a handle.
 
 In LWGL, some important native objects have wrapper Java classes to make things
 more type-safe to use, such as the VkInstance class. You make them by passing
